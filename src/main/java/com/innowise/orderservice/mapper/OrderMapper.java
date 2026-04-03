@@ -23,7 +23,9 @@ public interface OrderMapper {
                 base.getStatus(),
                 base.getTotalPrice(),
                 base.getItems(),
-                user
+                user,
+                base.getCreatedAt(),
+                base.getUpdatedAt()
         );
     }
 }
