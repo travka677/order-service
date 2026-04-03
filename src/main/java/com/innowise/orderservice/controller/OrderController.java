@@ -1,15 +1,132 @@
 package com.innowise.orderservice.controller;
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import com.innowise.orderservice.dto.request.CreateOrderRequest;
+import com.innowise.orderservice.dto.request.OrderFilterRequest;
+import com.innowise.orderservice.dto.request.UpdateOrderRequest;
+import com.innowise.orderservice.dto.response.OrderResponse;
+import com.innowise.orderservice.service.OrderService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.UUID;
+
+@Validated
 @RestController
-//@RequestMapping("/orders")
+@RequestMapping("/orders")
+@RequiredArgsConstructor
 public class OrderController {
 
-    @GetMapping("/")
-    public String hello() {
-        return "hello";
+    private final OrderService orderService;
+
+    /**
+     * POST /orders
+     * Creates a new order.
+     *
+     * @param request request payload containing order details
+     * @return 201 Created with OrderResponse (enriched with user data from User Service)
+     */
+    @PostMapping
+    public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
+        OrderResponse response = orderService.createOrder(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * GET /orders/{id}
+     * Retrieves an order by its ID.
+     *
+     * @param id order identifier
+     * @return 200 OK with OrderResponse
+     */
+    @GetMapping("/{id}")
+    public ResponseEntity<OrderResponse> getOrderById(@PathVariable UUID id) {
+        return ResponseEntity.ok(orderService.getOrderById(id));
+    }
+
+    /**
+     * GET /orders?page=0&size=20&sort=createdAt,desc
+     * Retrieves a paginated list of orders with optional filtering.
+     * <p>
+     * Request body (optional):
+     * {
+     *   "createdFrom": "2024-01-01T00:00:00",
+     *   "createdTo":   "2024-12-31T23:59:59",
+     *   "statuses":    ["PENDING", "CONFIRMED"]
+     * }
+     *
+     * @param filter optional filter criteria
+     * @param pageable pagination and sorting configuration
+     * @return 200 OK with a page of OrderResponse
+     */
+    @GetMapping
+    public ResponseEntity<Page<OrderResponse>> getOrders(
+            @Valid @RequestBody(required = false) OrderFilterRequest filter,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable
+    ) {
+        OrderFilterRequest effectiveFilter = filter != null
+                ? filter
+                : new OrderFilterRequest(null, null, null);
+        return ResponseEntity.ok(orderService.getOrders(effectiveFilter, pageable));
+    }
+
+    /**
+     * GET /orders/user/{userId}?email=user@example.com
+     * Retrieves all orders for a specific user.
+     * <p>
+     * The email parameter is required to enrich the response
+     * with user data from the User Service.
+     *
+     * @param userId user identifier
+     * @param email user email (must be valid)
+     * @return 200 OK with list of OrderResponse
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<List<OrderResponse>> getOrdersByUserId(
+            @PathVariable UUID userId,
+            @RequestParam
+            @NotNull(message = "email is required")
+            @Email(message = "email must be valid")
+            String email
+    ) {
+        return ResponseEntity.ok(orderService.getOrdersByUserId(userId, email));
+    }
+
+    /**
+     * PUT /orders/{id}
+     * Updates an existing order (status and/or items).
+     *
+     * @param id order identifier
+     * @param request update payload
+     * @return 200 OK with updated OrderResponse
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<OrderResponse> updateOrder(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateOrderRequest request
+    ) {
+        return ResponseEntity.ok(orderService.updateOrder(id, request));
+    }
+
+    /**
+     * DELETE /orders/{id}
+     * Performs a soft delete of the order (marks it as deleted without removing from the database).
+     *
+     * @param id order identifier
+     * @return 204 No Content
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteOrder(@PathVariable UUID id) {
+        orderService.deleteOrder(id);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -16,7 +16,10 @@ import java.util.UUID;
 public class Order extends Auditable {
 
     private UUID userId;
-    private String status;
+
+    @Enumerated(EnumType.STRING)
+    private OrderStatus status;
+
     private BigDecimal totalPrice;
 
     @Builder.Default
