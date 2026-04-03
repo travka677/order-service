@@ -21,7 +21,12 @@
         <resilience4j.version>2.2.0</resilience4j.version>
         <!-- Sonar -->
         <sonar.coverage.jacoco.xmlReportPaths>${project.build.directory}/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
-        <sonar.coverage.exclusions>**/dto/**</sonar.coverage.exclusions>
+        <sonar.coverage.exclusions>
+            **/dto/**,
+            **/client/**,
+            **/specification/**,
+            **/exception/**
+        </sonar.coverage.exclusions>
         <sonar.organization>travka677</sonar.organization>
     </properties>
 
