@@ -14,6 +14,7 @@ import java.util.UUID;
 @Component
 public class UserServiceClient {
 
+    public static final String USERS_PATH = "/users";
     private static final String CB_NAME = "userService";
 
     private final WebClient webClient;
@@ -27,7 +28,7 @@ public class UserServiceClient {
     public UserResponse getUserByEmail(String email) {
         log.debug("Fetching user by email: {}", email);
         return webClient.get()
-                .uri(b -> b.path("/users").queryParam("email", email).build())
+                .uri(b -> b.path(USERS_PATH).queryParam("email", email).build())
                 .retrieve()
                 .bodyToMono(UserResponse.class)
                 .block();
@@ -43,7 +44,7 @@ public class UserServiceClient {
     public UserResponse getUserById(UUID userId) {
         log.debug("Fetching user by id: {}", userId);
         return webClient.get()
-                .uri("/users/{id}", userId)
+                .uri(USERS_PATH + "/{id}", userId)
                 .retrieve()
                 .bodyToMono(UserResponse.class)
                 .block();
