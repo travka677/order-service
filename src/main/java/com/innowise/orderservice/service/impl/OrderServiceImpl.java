@@ -48,6 +48,10 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse createOrder(CreateOrderRequest request) {
         UserResponse user = userServiceClient.getUserByEmail(request.userEmail());
 
+        if (user == null) {
+            throw new IllegalStateException("User Service is unavailable, cannot create order");
+        }
+
         Order order = Order.builder()
                 .userId(user.userId())
                 .status(OrderStatus.PENDING)
@@ -146,7 +150,6 @@ public class OrderServiceImpl implements OrderService {
         }
 
         Order updated = orderRepository.save(order);
-
         UserResponse user = userServiceClient.getUserById(updated.getUserId());
         return orderMapper.toResponse(updated, user);
     }

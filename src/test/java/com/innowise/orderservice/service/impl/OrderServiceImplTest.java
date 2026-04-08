@@ -9,6 +9,7 @@ import com.innowise.orderservice.dto.response.OrderResponse;
 import com.innowise.orderservice.dto.response.UserResponse;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.entity.Order;
+import com.innowise.orderservice.entity.OrderItem;
 import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.exception.OrderNotFoundException;
 import com.innowise.orderservice.mapper.OrderMapper;
@@ -27,6 +28,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -56,54 +58,49 @@ class OrderServiceImplTest {
 
     private UUID orderId;
     private UUID userId;
+    private UUID itemId;
     private Order order;
-    private OrderResponse orderResponse;
     private UserResponse userResponse;
+    private OrderResponse orderResponse;
 
     @BeforeEach
     void setUp() {
         orderId = UUID.randomUUID();
         userId = UUID.randomUUID();
+        itemId = UUID.randomUUID();
 
         order = new Order();
         order.setId(orderId);
         order.setUserId(userId);
         order.setStatus(OrderStatus.PENDING);
         order.setDeleted(false);
+        order.setItems(new ArrayList<>());
 
-        userResponse = new UserResponse();
-
-        orderResponse = new OrderResponse(orderId, userId, OrderStatus.PENDING, null, List.of(), null, null, null);
+        userResponse = new UserResponse(userId, "test@innowise.com", "John", "Doe");
+        orderResponse = new OrderResponse(orderId, OrderStatus.PENDING, BigDecimal.TEN, List.of(), userResponse, null, null);
     }
 
     @Test
     @DisplayName("Should save and return order with calculated total price")
     void createOrder() {
-        CreateOrderRequest request = new CreateOrderRequest();
-        request.setUserId(userId);
-        request.setUserEmail("test@mail.com");
-
-        OrderItemRequest itemRequest = new OrderItemRequest();
-        itemRequest.setItemId(UUID.randomUUID());
-        itemRequest.setQuantity(2);
-
-        request.setItems(List.of(itemRequest));
+        OrderItemRequest itemRequest = new OrderItemRequest(itemId, 2);
+        CreateOrderRequest request = new CreateOrderRequest("test@innowise.com", List.of(itemRequest));
 
         Item item = new Item();
+        item.setId(itemId);
         item.setPrice(BigDecimal.TEN);
 
-        when(itemRepository.findById(any())).thenReturn(Optional.of(item));
+        when(userServiceClient.getUserByEmail(request.userEmail())).thenReturn(userResponse);
+        when(itemRepository.findAllById(List.of(itemId))).thenReturn(List.of(item));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
-        when(userServiceClient.getUserByEmail(anyString())).thenReturn(userResponse);
-        when(orderMapper.toResponse(any(Order.class), any(UserResponse.class)))
-                .thenReturn(orderResponse);
+        when(orderMapper.toResponse(any(Order.class), eq(userResponse))).thenReturn(orderResponse);
 
         OrderResponse result = orderService.createOrder(request);
 
-        assertThat(result).isNotNull();
+        assertThat(result).isEqualTo(orderResponse);
         verify(orderRepository).save(any(Order.class));
-        verify(itemRepository).findById(any());
-        verify(userServiceClient).getUserByEmail(anyString());
+        verify(itemRepository).findAllById(List.of(itemId));
+        verify(userServiceClient).getUserByEmail(request.userEmail());
     }
 
     @Test
@@ -111,12 +108,12 @@ class OrderServiceImplTest {
     void getOrderById() {
         when(orderRepository.findByIdAndDeletedFalse(orderId)).thenReturn(Optional.of(order));
         when(userServiceClient.getUserById(userId)).thenReturn(userResponse);
-        when(orderMapper.toResponse(any(Order.class), any(UserResponse.class)))
-                .thenReturn(orderResponse);
+        when(orderMapper.toResponse(order, userResponse)).thenReturn(orderResponse);
 
         OrderResponse result = orderService.getOrderById(orderId);
 
-        assertThat(result.getId()).isEqualTo(orderId);
+        assertThat(result).isEqualTo(orderResponse);
+        verify(userServiceClient).getUserById(userId);
     }
 
     @Test
@@ -125,68 +122,74 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdAndDeletedFalse(orderId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderService.getOrderById(orderId))
-                .isInstanceOf(OrderNotFoundException.class);
+                .isInstanceOf(OrderNotFoundException.class)
+                .hasMessageContaining(orderId.toString());
     }
 
     @Test
-    @DisplayName("Should return filtered page of orders")
+    @DisplayName("Should return filtered page of orders enriched with user data")
     void getOrders() {
         PageRequest pageable = PageRequest.of(0, 10);
         Page<Order> page = new PageImpl<>(List.of(order));
+        OrderFilterRequest filter = new OrderFilterRequest(null, null, null);
 
         when(orderRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(page);
-        when(userServiceClient.getUserById(any())).thenReturn(userResponse);
-        when(orderMapper.toResponse(any(Order.class), any(UserResponse.class)))
-                .thenReturn(orderResponse);
+        when(userServiceClient.getUsersByIds(List.of(userId))).thenReturn(List.of(userResponse));
+        when(orderMapper.toResponse(order, userResponse)).thenReturn(orderResponse);
 
-        Page<OrderResponse> result = orderService.getOrders(new OrderFilterRequest(null, null, null), pageable);
+        Page<OrderResponse> result = orderService.getOrders(filter, pageable);
 
         assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0)).isEqualTo(orderResponse);
+        verify(userServiceClient).getUsersByIds(List.of(userId));
     }
 
     @Test
     @DisplayName("Should return empty page when no orders match criteria")
     void getOrdersEmpty() {
         PageRequest pageable = PageRequest.of(0, 10);
-        when(orderRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(Page.empty());
+        OrderFilterRequest filter = new OrderFilterRequest(null, null, null);
 
-        Page<OrderResponse> result = orderService.getOrders(new OrderFilterRequest(null, null, null), pageable);
+        when(orderRepository.findAll(any(Specification.class), eq(pageable))).thenReturn(Page.empty());
+        when(userServiceClient.getUsersByIds(List.of())).thenReturn(List.of());
+
+        Page<OrderResponse> result = orderService.getOrders(filter, pageable);
 
         assertThat(result.getContent()).isEmpty();
     }
 
     @Test
-    @DisplayName("Should return orders for specific user and enrich with email data")
+    @DisplayName("Should return orders for specific user fetched by userId")
     void getOrdersByUserId() {
-        String email = "test@innowise.com";
-
         when(orderRepository.findAllByUserIdAndDeletedFalse(userId)).thenReturn(List.of(order));
-        when(userServiceClient.getUserByEmail(email)).thenReturn(userResponse);
-        when(orderMapper.toResponse(any(Order.class), any(UserResponse.class)))
-                .thenReturn(orderResponse);
+        when(userServiceClient.getUserById(userId)).thenReturn(userResponse);
+        when(orderMapper.toResponse(order, userResponse)).thenReturn(orderResponse);
 
-        List<OrderResponse> result = orderService.getOrdersByUserId(userId, email);
+        List<OrderResponse> result = orderService.getOrdersByUserId(userId, "test@innowise.com");
 
-        assertThat(result).isNotEmpty();
-        verify(userServiceClient).getUserByEmail(email);
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst()).isEqualTo(orderResponse);
+        verify(userServiceClient).getUserById(userId);
+        verify(userServiceClient, never()).getUserByEmail(anyString());
     }
 
     @Test
     @DisplayName("Should update order status and return updated response")
     void updateOrder() {
-        UpdateOrderRequest request = new UpdateOrderRequest();
-        request.setUserEmail("test@mail.com");
+        UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.CONFIRMED, null, "test@innowise.com");
 
         when(orderRepository.findByIdAndDeletedFalse(orderId)).thenReturn(Optional.of(order));
         when(orderRepository.save(order)).thenReturn(order);
-        when(userServiceClient.getUserByEmail(anyString())).thenReturn(userResponse);
-        when(orderMapper.toResponse(any(Order.class), any(UserResponse.class)))
-                .thenReturn(orderResponse);
+        when(userServiceClient.getUserById(userId)).thenReturn(userResponse);
+        when(orderMapper.toResponse(order, userResponse)).thenReturn(orderResponse);
 
         OrderResponse result = orderService.updateOrder(orderId, request);
 
-        assertThat(result).isNotNull();
+        assertThat(result).isEqualTo(orderResponse);
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
         verify(orderRepository).save(order);
+        verify(userServiceClient).getUserById(userId);
+        verify(userServiceClient, never()).getUserByEmail(anyString());
     }
 
     @Test
@@ -194,8 +197,9 @@ class OrderServiceImplTest {
     void updateOrderNotFound() {
         when(orderRepository.findByIdAndDeletedFalse(orderId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> orderService.updateOrder(orderId, new UpdateOrderRequest()))
-                .isInstanceOf(OrderNotFoundException.class);
+        assertThatThrownBy(() -> orderService.updateOrder(orderId, new UpdateOrderRequest(OrderStatus.CONFIRMED, null, "test@innowise.com")))
+                .isInstanceOf(OrderNotFoundException.class)
+                .hasMessageContaining(orderId.toString());
     }
 
     @Test
@@ -215,6 +219,7 @@ class OrderServiceImplTest {
         when(orderRepository.findByIdAndDeletedFalse(orderId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderService.deleteOrder(orderId))
-                .isInstanceOf(OrderNotFoundException.class);
+                .isInstanceOf(OrderNotFoundException.class)
+                .hasMessageContaining(orderId.toString());
     }
 }

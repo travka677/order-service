@@ -17,7 +17,7 @@ public class Order extends Auditable {
 
     private UUID userId;
 
-    @Enumerated(EnumType.STRING)
+    @Enumerated(EnumType.ORDINAL)
     private OrderStatus status;
 
     private BigDecimal totalPrice;
