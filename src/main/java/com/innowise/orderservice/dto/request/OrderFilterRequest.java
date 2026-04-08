@@ -1,16 +1,19 @@
 package com.innowise.orderservice.dto.request;
 
 import com.innowise.orderservice.entity.OrderStatus;
-import lombok.AllArgsConstructor;
-import lombok.Data;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-@Data
-@AllArgsConstructor
-public class OrderFilterRequest {
-    private LocalDateTime createdFrom;
-    private LocalDateTime createdTo;
-    private List<OrderStatus> statuses;
+public record OrderFilterRequest(
+
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        LocalDateTime createdFrom,
+
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+        LocalDateTime createdTo,
+
+        List<OrderStatus> statuses
+) {
 }

@@ -14,21 +14,30 @@ import java.util.UUID;
 @Component
 public class UserServiceClient {
 
-    public static final String USERS_PATH = "/users";
+    private static final String USERS_PATH = "/users";
     private static final String CB_NAME = "userService";
 
     private final WebClient webClient;
 
-    public UserServiceClient(WebClient.Builder builder,
-                             @Value("${app.user-service.base-url}") String baseUrl) {
+    public UserServiceClient(WebClient.Builder builder, @Value("${app.user-service.base-url}") String baseUrl) {
         this.webClient = builder.baseUrl(baseUrl).build();
     }
 
     @CircuitBreaker(name = CB_NAME, fallbackMethod = "getUserByEmailFallback")
     public UserResponse getUserByEmail(String email) {
-        log.debug("Fetching user by email: {}", email);
+        log.info("Fetching user by email: {}", email);
         return webClient.get()
                 .uri(b -> b.path(USERS_PATH).queryParam("email", email).build())
+                .retrieve()
+                .bodyToMono(UserResponse.class)
+                .block();
+    }
+
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "getUserByIdFallback")
+    public UserResponse getUserById(UUID userId) {
+        log.info("Fetching user by userId: {}", userId);
+        return webClient.get()
+                .uri(USERS_PATH + "/{id}", userId)
                 .retrieve()
                 .bodyToMono(UserResponse.class)
                 .block();
@@ -38,16 +47,6 @@ public class UserServiceClient {
     private UserResponse getUserByEmailFallback(String email, Throwable ex) {
         logFallback("email=" + email, ex);
         return null;
-    }
-
-    @CircuitBreaker(name = CB_NAME, fallbackMethod = "getUserByIdFallback")
-    public UserResponse getUserById(UUID userId) {
-        log.debug("Fetching user by id: {}", userId);
-        return webClient.get()
-                .uri(USERS_PATH + "/{id}", userId)
-                .retrieve()
-                .bodyToMono(UserResponse.class)
-                .block();
     }
 
     @SuppressWarnings("unused")

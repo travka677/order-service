@@ -88,7 +88,7 @@ class OrderControllerIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {"id":"%s","email":"%s"}
+                                {"userId":"%s","email":"%s"}
                                 """.formatted(userId, email))));
 
         mockMvc.perform(post("/orders")
@@ -149,7 +149,7 @@ class OrderControllerIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {"id":"%s","email":"%s"}
+                                {"userId":"%s","email":"%s"}
                                 """.formatted(userId, email))));
 
         mockMvc.perform(MockMvcRequestBuilders.get("/orders/user/{userId}", userId)

@@ -22,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,18 +45,17 @@ public class OrderServiceImpl implements OrderService {
     @Transactional
     public OrderResponse createOrder(CreateOrderRequest request) {
         Order order = Order.builder()
-                .userId(request.getUserId())
                 .status(OrderStatus.PENDING)
                 .totalPrice(BigDecimal.ZERO)
                 .build();
 
-        List<OrderItem> orderItems = buildOrderItems(request.getItems(), order);
+        List<OrderItem> orderItems = buildOrderItems(request.items(), order);
         order.setItems(orderItems);
         order.setTotalPrice(calculateTotal(orderItems));
 
         Order saved = orderRepository.save(order);
 
-        UserResponse user = userServiceClient.getUserByEmail(request.getUserEmail());
+        UserResponse user = userServiceClient.getUserByEmail(request.userEmail());
         return orderMapper.toResponse(saved, user);
     }
 
@@ -71,8 +71,11 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional(readOnly = true)
     public Page<OrderResponse> getOrders(OrderFilterRequest filter, Pageable pageable) {
-        return orderRepository
-                .findAll(OrderSpecification.withFilters(filter), pageable)
+        Specification<Order> orderSpec = OrderSpecification
+                .createdBetween(filter.createdFrom(), filter.createdTo())
+                .and(OrderSpecification.hasStatuses(filter.statuses()));
+
+        return orderRepository.findAll(orderSpec, pageable)
                 .map(order -> {
                     UserResponse user = userServiceClient.getUserById(order.getUserId());
                     return orderMapper.toResponse(order, user);
@@ -122,14 +125,14 @@ public class OrderServiceImpl implements OrderService {
 
     private Order findActiveOrder(UUID id) {
         return orderRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with id " + id));
+                .orElseThrow(() -> new OrderNotFoundException("Order not found with userId " + id));
     }
 
     private List<OrderItem> buildOrderItems(List<OrderItemRequest> requests, Order order) {
         List<OrderItem> result = new ArrayList<>();
         for (OrderItemRequest req : requests) {
             Item item = itemRepository.findById(req.getItemId())
-                    .orElseThrow(() -> new ItemNotFoundException("Item not found with id " + req.getItemId()));
+                    .orElseThrow(() -> new ItemNotFoundException("Item not found with userId " + req.getItemId()));
 
             result.add(OrderItem.builder()
                     .order(order)

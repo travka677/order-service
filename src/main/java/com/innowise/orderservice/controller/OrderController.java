@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,29 +55,18 @@ public class OrderController {
     }
 
     /**
-     * GET /orders?page=0&size=20&sort=createdAt,desc
-     * Retrieves a paginated list of orders with optional filtering.
-     * <p>
-     * Request body (optional):
-     * {
-     *   "createdFrom": "2024-01-01T00:00:00",
-     *   "createdTo":   "2024-12-31T23:59:59",
-     *   "statuses":    ["PENDING", "CONFIRMED"]
-     * }
+     * Retrieves a paginated list of orders with optional date range and status filtering.
      *
-     * @param filter optional filter criteria
+     * @param filter   filtering criteria (query params)
      * @param pageable pagination and sorting configuration
-     * @return 200 OK with a page of OrderResponse
+     * @return 200 OK with a page of order responses
      */
     @GetMapping
     public ResponseEntity<Page<OrderResponse>> getOrders(
-            @Valid @RequestBody(required = false) OrderFilterRequest filter,
-            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable
+            @Valid OrderFilterRequest filter,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        OrderFilterRequest effectiveFilter = filter != null
-                ? filter
-                : new OrderFilterRequest(null, null, null);
-        return ResponseEntity.ok(orderService.getOrders(effectiveFilter, pageable));
+        return ResponseEntity.ok(orderService.getOrders(filter, pageable));
     }
 
     /**
@@ -102,7 +92,7 @@ public class OrderController {
     }
 
     /**
-     * PUT /orders/{id}
+     * PUT /orders/{userId}
      * Updates an existing order (status and/or items).
      *
      * @param id order identifier
@@ -118,7 +108,7 @@ public class OrderController {
     }
 
     /**
-     * DELETE /orders/{id}
+     * DELETE /orders/{userId}
      * Performs a soft delete of the order (marks it as deleted without removing from the database).
      *
      * @param id order identifier
