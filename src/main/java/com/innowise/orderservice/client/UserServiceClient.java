@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.UUID;
 
 @Slf4j
@@ -43,6 +45,19 @@ public class UserServiceClient {
                 .block();
     }
 
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "getUsersByIdsFallback")
+    public List<UserResponse> getUsersByIds(List<UUID> userIds) {
+        log.info("Fetching users by ids: {}", userIds);
+        return webClient.get()
+                .uri(b -> b.path(USERS_PATH)
+                        .queryParam("ids", userIds.stream().map(UUID::toString).toList())
+                        .build())
+                .retrieve()
+                .bodyToFlux(UserResponse.class)
+                .collectList()
+                .block();
+    }
+
     @SuppressWarnings("unused")
     private UserResponse getUserByEmailFallback(String email, Throwable ex) {
         logFallback("email=" + email, ex);
@@ -53,6 +68,12 @@ public class UserServiceClient {
     private UserResponse getUserByIdFallback(UUID userId, Throwable ex) {
         logFallback("userId=" + userId, ex);
         return null;
+    }
+
+    @SuppressWarnings("unused")
+    private List<UserResponse> getUsersByIdsFallback(List<UUID> userIds, Throwable ex) {
+        logFallback("userIds=" + userIds, ex);
+        return Collections.emptyList();
     }
 
     private void logFallback(String identifier, Throwable ex) {

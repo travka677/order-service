@@ -7,7 +7,6 @@ import com.innowise.orderservice.dto.response.OrderResponse;
 import com.innowise.orderservice.service.OrderService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,7 +22,6 @@ import java.util.UUID;
 
 @Validated
 @RestController
-@RequestMapping("/orders")
 @RequiredArgsConstructor
 public class OrderController {
 
@@ -36,7 +34,7 @@ public class OrderController {
      * @param request request payload containing order details
      * @return 201 Created with OrderResponse (enriched with user data from User Service)
      */
-    @PostMapping
+    @PostMapping("/orders")
     public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
         OrderResponse response = orderService.createOrder(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -49,7 +47,7 @@ public class OrderController {
      * @param id order identifier
      * @return 200 OK with OrderResponse
      */
-    @GetMapping("/{id}")
+    @GetMapping("/orders/{id}")
     public ResponseEntity<OrderResponse> getOrderById(@PathVariable UUID id) {
         return ResponseEntity.ok(orderService.getOrderById(id));
     }
@@ -61,7 +59,7 @@ public class OrderController {
      * @param pageable pagination and sorting configuration
      * @return 200 OK with a page of order responses
      */
-    @GetMapping
+    @GetMapping("/orders")
     public ResponseEntity<Page<OrderResponse>> getOrders(
             @Valid OrderFilterRequest filter,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
@@ -70,36 +68,30 @@ public class OrderController {
     }
 
     /**
-     * GET /orders/user/{userId}?email=user@example.com
+     * GET /users/{userId}/orders?email=user@example.com
      * Retrieves all orders for a specific user.
-     * <p>
-     * The email parameter is required to enrich the response
-     * with user data from the User Service.
      *
      * @param userId user identifier
-     * @param email user email (must be valid)
+     * @param email  user email used to look up the user in User Service (must be valid)
      * @return 200 OK with list of OrderResponse
      */
-    @GetMapping("/user/{userId}")
+    @GetMapping("/users/{userId}/orders")
     public ResponseEntity<List<OrderResponse>> getOrdersByUserId(
             @PathVariable UUID userId,
-            @RequestParam
-            @NotNull(message = "email is required")
-            @Email(message = "email must be valid")
-            String email
+            @RequestParam @Email(message = "email must be valid") String email
     ) {
         return ResponseEntity.ok(orderService.getOrdersByUserId(userId, email));
     }
 
     /**
-     * PUT /orders/{userId}
+     * PUT /orders/{id}
      * Updates an existing order (status and/or items).
      *
      * @param id order identifier
      * @param request update payload
      * @return 200 OK with updated OrderResponse
      */
-    @PutMapping("/{id}")
+    @PutMapping("/orders/{id}")
     public ResponseEntity<OrderResponse> updateOrder(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateOrderRequest request
@@ -108,13 +100,13 @@ public class OrderController {
     }
 
     /**
-     * DELETE /orders/{userId}
+     * DELETE /orders/{id}
      * Performs a soft delete of the order (marks it as deleted without removing from the database).
      *
      * @param id order identifier
      * @return 204 No Content
      */
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/orders/{id}")
     public ResponseEntity<Void> deleteOrder(@PathVariable UUID id) {
         orderService.deleteOrder(id);
         return ResponseEntity.noContent().build();
