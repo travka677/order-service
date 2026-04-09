@@ -176,7 +176,8 @@ class OrderControllerIntegrationTest {
             mockMvc.perform(get("/users/{userId}/orders", PREDEFINED_USER_ID)
                             .param("email", PREDEFINED_EMAIL))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$").isArray());
+                    .andExpect(jsonPath("$.content").isArray())
+                    .andExpect(jsonPath("$.totalElements").exists());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

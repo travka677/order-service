@@ -18,7 +18,7 @@ public interface OrderService {
 
     Page<OrderResponse> getOrders(OrderFilterRequest filter, Pageable pageable);
 
-    List<OrderResponse> getOrdersByUserId(UUID userId, String userEmail);
+    Page<OrderResponse> getOrdersByUserId(UUID userId, String userEmail, Pageable pageable);
 
     OrderResponse updateOrder(UUID id, UpdateOrderRequest request);
 

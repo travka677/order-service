@@ -73,14 +73,16 @@ public class OrderController {
      *
      * @param userId user identifier
      * @param email  user email used to look up the user in User Service (must be valid)
+     * @param pageable pagination and sorting configuration
      * @return 200 OK with list of OrderResponse
      */
     @GetMapping("/users/{userId}/orders")
-    public ResponseEntity<List<OrderResponse>> getOrdersByUserId(
+    public ResponseEntity<Page<OrderResponse>> getOrdersByUserId(
             @PathVariable UUID userId,
-            @RequestParam @Email(message = "email must be valid") String email
+            @RequestParam @Email(message = "email must be valid") String email,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
-        return ResponseEntity.ok(orderService.getOrdersByUserId(userId, email));
+        return ResponseEntity.ok(orderService.getOrdersByUserId(userId, email, pageable));
     }
 
     /**

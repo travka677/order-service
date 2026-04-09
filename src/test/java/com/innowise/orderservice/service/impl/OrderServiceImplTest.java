@@ -9,7 +9,6 @@ import com.innowise.orderservice.dto.response.OrderResponse;
 import com.innowise.orderservice.dto.response.UserResponse;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.entity.Order;
-import com.innowise.orderservice.entity.OrderItem;
 import com.innowise.orderservice.entity.OrderStatus;
 import com.innowise.orderservice.exception.OrderNotFoundException;
 import com.innowise.orderservice.mapper.OrderMapper;
@@ -159,16 +158,19 @@ class OrderServiceImplTest {
     }
 
     @Test
-    @DisplayName("Should return orders for specific user fetched by userId")
+    @DisplayName("Should return page of orders for specific user fetched by userId")
     void getOrdersByUserId() {
-        when(orderRepository.findAllByUserIdAndDeletedFalse(userId)).thenReturn(List.of(order));
+        PageRequest pageable = PageRequest.of(0, 20);
+        Page<Order> page = new PageImpl<>(List.of(order));
+
+        when(orderRepository.findAllByUserIdAndDeletedFalse(userId, pageable)).thenReturn(page);
         when(userServiceClient.getUserById(userId)).thenReturn(userResponse);
         when(orderMapper.toResponse(order, userResponse)).thenReturn(orderResponse);
 
-        List<OrderResponse> result = orderService.getOrdersByUserId(userId, "test@innowise.com");
+        Page<OrderResponse> result = orderService.getOrdersByUserId(userId, "test@innowise.com", pageable);
 
-        assertThat(result).hasSize(1);
-        assertThat(result.getFirst()).isEqualTo(orderResponse);
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0)).isEqualTo(orderResponse);
         verify(userServiceClient).getUserById(userId);
         verify(userServiceClient, never()).getUserByEmail(anyString());
     }
@@ -195,6 +197,8 @@ class OrderServiceImplTest {
     @Test
     @DisplayName("Should throw OrderNotFoundException on update if order doesn't exist")
     void updateOrderNotFound() {
+        UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.CONFIRMED, null, "test@innowise.com");
+
         when(orderRepository.findByIdAndDeletedFalse(orderId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> orderService.updateOrder(orderId, new UpdateOrderRequest(OrderStatus.CONFIRMED, null, "test@innowise.com")))

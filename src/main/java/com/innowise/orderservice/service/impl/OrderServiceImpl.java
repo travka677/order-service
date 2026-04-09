@@ -96,13 +96,11 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<OrderResponse> getOrdersByUserId(UUID userId, String userEmail) {
+    public Page<OrderResponse> getOrdersByUserId(UUID userId, String userEmail, Pageable pageable) {
         UserResponse user = userServiceClient.getUserById(userId);
 
-        return orderRepository.findAllByUserIdAndDeletedFalse(userId)
-                .stream()
-                .map(order -> orderMapper.toResponse(order, user))
-                .toList();
+        return orderRepository.findAllByUserIdAndDeletedFalse(userId, pageable)
+                .map(order -> orderMapper.toResponse(order, user));
     }
 
     @Override

@@ -15,7 +15,5 @@ CREATE TABLE orders
 );
 
 --changeset dev:001-create-orders-indexes
--- Covers findAllByUserIdAndDeletedFalse (most frequent query)
 CREATE INDEX idx_orders_user_id_deleted ON orders (user_id, deleted);
--- Covers filtering by status with soft-delete condition
 CREATE INDEX idx_orders_status_deleted ON orders (status, deleted);
