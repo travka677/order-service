@@ -9,15 +9,17 @@ import java.util.List;
 
 public class OrderSpecification {
 
+    public static final String CREATED_AT = "createdAt";
+
     private OrderSpecification() {
     }
 
     public static Specification<Order> createdBetween(LocalDateTime from, LocalDateTime to) {
         return (root, query, cb) -> {
             if (from == null && to == null) return null;
-            if (from != null && to != null) return cb.between(root.get("createdAt"), from, to);
-            if (from != null) return cb.greaterThanOrEqualTo(root.get("createdAt"), from);
-            return cb.lessThanOrEqualTo(root.get("createdAt"), to);
+            if (from != null && to != null) return cb.between(root.get(CREATED_AT), from, to);
+            if (from != null) return cb.greaterThanOrEqualTo(root.get(CREATED_AT), from);
+            return cb.lessThanOrEqualTo(root.get(CREATED_AT), to);
         };
     }
 
