@@ -6,6 +6,7 @@ import com.innowise.orderservice.dto.request.OrderItemRequest;
 import com.innowise.orderservice.entity.Item;
 import com.innowise.orderservice.repository.ItemRepository;
 import com.innowise.orderservice.repository.OrderRepository;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -69,10 +70,14 @@ class OrderControllerIntegrationTest {
     @Autowired
     private OrderRepository orderRepository;
 
+    @Autowired
+    private CircuitBreakerRegistry circuitBreakerRegistry;
+
     private UUID itemId;
 
     @BeforeEach
     void setUp() {
+        circuitBreakerRegistry.circuitBreaker("userService").reset();
         orderRepository.deleteAll();
         itemRepository.deleteAll();
 
@@ -242,7 +247,7 @@ class OrderControllerIntegrationTest {
 
         String updateRequestJson = """
                 {
-                    "status": "APPROVED",
+                    "status": "CONFIRMED",
                     "items": [
                         { "itemId": "%s", "quantity": 5 }
                     ],
