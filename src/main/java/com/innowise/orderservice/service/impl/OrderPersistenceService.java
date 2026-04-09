@@ -56,7 +56,6 @@ public class OrderPersistenceService {
         return orderMapper.toResponse(saved, user);
     }
 
-    @Transactional(readOnly = true)
     public Order findActiveOrder(UUID id) {
         return orderRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + id));
