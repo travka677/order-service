@@ -18,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -32,9 +33,6 @@ import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.serverError;
 import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -97,13 +95,13 @@ class OrderControllerIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {"userId":"%s","email":"%s","firstName":"John","lastName":"Doe"}
+                                {"userId":"%s","email":"%s","firstName":"Ivan","lastName":"Ivanov"}
                                 """.formatted(expectedUserId, expectedEmail))));
 
         CreateOrderRequest request = buildRequest(expectedUserId, expectedEmail);
 
         try {
-            mockMvc.perform(post("/orders")
+            mockMvc.perform(MockMvcRequestBuilders.post("/orders")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
@@ -126,7 +124,7 @@ class OrderControllerIntegrationTest {
                 .willReturn(serverError()));
 
         try {
-            mockMvc.perform(post("/orders")
+            mockMvc.perform(MockMvcRequestBuilders.post("/orders")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(buildRequest(PREDEFINED_USER_ID, email))))
                     .andExpect(status().isServiceUnavailable());
@@ -141,7 +139,7 @@ class OrderControllerIntegrationTest {
         CreateOrderRequest request = new CreateOrderRequest(PREDEFINED_EMAIL, null);
 
         try {
-            mockMvc.perform(post("/orders")
+            mockMvc.perform(MockMvcRequestBuilders.post("/orders")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isBadRequest());
@@ -151,11 +149,42 @@ class OrderControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("Should return 200 and order details when order exists")
+    void getOrderByIdSuccess() {
+        UUID orderId = createTestOrder();
+        try {
+            mockMvc.perform(MockMvcRequestBuilders.get("/orders/{id}", orderId))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(orderId.toString()))
+                    .andExpect(jsonPath("$.status").exists());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
     @DisplayName("Should return 404 when order does not exist")
     void getOrderByIdWhenNotFound() {
         try {
-            mockMvc.perform(get("/orders/{id}", UUID.randomUUID()))
+            mockMvc.perform(MockMvcRequestBuilders.get("/orders/{id}", UUID.randomUUID()))
                     .andExpect(status().isNotFound());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    @DisplayName("Should return 200 and paginated list of all orders")
+    void getOrdersSuccess() {
+        createTestOrder();
+        try {
+            mockMvc.perform(MockMvcRequestBuilders.get("/orders")
+                            .param("page", "0")
+                            .param("size", "20")
+                            .param("sort", "createdAt,desc"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content").isArray())
+                    .andExpect(jsonPath("$.content").isNotEmpty());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -169,11 +198,11 @@ class OrderControllerIntegrationTest {
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {"userId":"%s","email":"%s","firstName":"John","lastName":"Doe"}
+                                {"userId":"%s","email":"%s","firstName":"Ivan","lastName":"Ivanov"}
                                 """.formatted(PREDEFINED_USER_ID, PREDEFINED_EMAIL))));
 
         try {
-            mockMvc.perform(get("/users/{userId}/orders", PREDEFINED_USER_ID)
+            mockMvc.perform(MockMvcRequestBuilders.get("/users/{userId}/orders", PREDEFINED_USER_ID)
                             .param("email", PREDEFINED_EMAIL))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.content").isArray())
@@ -187,7 +216,7 @@ class OrderControllerIntegrationTest {
     @DisplayName("Should return 400 when email query param is invalid")
     void getOrdersByUserIdWithInvalidEmail() {
         try {
-            mockMvc.perform(get("/users/{userId}/orders", PREDEFINED_USER_ID)
+            mockMvc.perform(MockMvcRequestBuilders.get("/users/{userId}/orders", PREDEFINED_USER_ID)
                             .param("email", "not-an-email"))
                     .andExpect(status().isBadRequest());
         } catch (Exception e) {
@@ -199,8 +228,45 @@ class OrderControllerIntegrationTest {
     @DisplayName("Should return 400 when email query param is missing")
     void getOrdersByUserIdWithoutEmail() {
         try {
-            mockMvc.perform(get("/users/{userId}/orders", PREDEFINED_USER_ID))
+            mockMvc.perform(MockMvcRequestBuilders.get("/users/{userId}/orders", PREDEFINED_USER_ID))
                     .andExpect(status().isBadRequest());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    @DisplayName("Should update order and return 200")
+    void updateOrderSuccess() {
+        UUID orderId = createTestOrder();
+
+        String updateRequestJson = """
+                {
+                    "status": "APPROVED",
+                    "items": [
+                        { "itemId": "%s", "quantity": 5 }
+                    ],
+                    "userEmail": "%s"
+                }
+                """.formatted(itemId, PREDEFINED_EMAIL);
+
+        try {
+            mockMvc.perform(MockMvcRequestBuilders.put("/orders/{id}", orderId)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(updateRequestJson))
+                    .andExpect(status().isOk());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Test
+    @DisplayName("Should perform soft delete and return 204")
+    void deleteOrderSuccess() {
+        UUID orderId = createTestOrder();
+        try {
+            mockMvc.perform(MockMvcRequestBuilders.delete("/orders/{id}", orderId))
+                    .andExpect(status().isNoContent());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -210,7 +276,7 @@ class OrderControllerIntegrationTest {
     @DisplayName("Should return 404 when deleting non-existent order")
     void deleteOrderWhenNotFound() {
         try {
-            mockMvc.perform(delete("/orders/{id}", UUID.randomUUID()))
+            mockMvc.perform(MockMvcRequestBuilders.delete("/orders/{id}", UUID.randomUUID()))
                     .andExpect(status().isNotFound());
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -219,5 +285,28 @@ class OrderControllerIntegrationTest {
 
     private CreateOrderRequest buildRequest(UUID userId, String email) {
         return new CreateOrderRequest(email, List.of(new OrderItemRequest(itemId, 2)));
+    }
+
+    private UUID createTestOrder() {
+        try {
+            stubFor(get(urlPathEqualTo("/users"))
+                    .withQueryParam("email", equalTo(PREDEFINED_EMAIL))
+                    .willReturn(aResponse()
+                            .withStatus(200)
+                            .withHeader("Content-Type", "application/json")
+                            .withBody("""
+                                    {"userId":"%s","email":"%s","firstName":"Ivan","lastName":"Ivanov"}
+                                    """.formatted(PREDEFINED_USER_ID, PREDEFINED_EMAIL))));
+
+            String responseBody = mockMvc.perform(MockMvcRequestBuilders.post("/orders")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(buildRequest(PREDEFINED_USER_ID, PREDEFINED_EMAIL))))
+                    .andExpect(status().isCreated())
+                    .andReturn().getResponse().getContentAsString();
+
+            return UUID.fromString(objectMapper.readTree(responseBody).get("id").asText());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 }
