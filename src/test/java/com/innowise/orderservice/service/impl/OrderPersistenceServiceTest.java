@@ -122,15 +122,16 @@ class OrderPersistenceServiceTest {
     }
 
     @Test
-    @DisplayName("Should throw OrderNotFoundException when order is deleted")
     void findActiveOrderWhenDeleted() {
         Order order = saveOrder();
         order.setDeleted(true);
         orderRepository.save(order);
 
-        assertThatThrownBy(() -> persistenceService.findActiveOrder(order.getId()))
+        UUID orderId = order.getId();
+
+        assertThatThrownBy(() -> persistenceService.findActiveOrder(orderId))
                 .isInstanceOf(OrderNotFoundException.class)
-                .hasMessageContaining(order.getId().toString());
+                .hasMessageContaining(orderId.toString());
     }
 
     @Test
@@ -216,8 +217,9 @@ class OrderPersistenceServiceTest {
     @DisplayName("Should throw OrderNotFoundException when updating non-existent order")
     void updateOrderNotFound() {
         UpdateOrderRequest request = new UpdateOrderRequest(OrderStatus.CONFIRMED, null, "test@innowise.com");
+        UUID nonExistentId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> persistenceService.updateOrder(UUID.randomUUID(), request, user))
+        assertThatThrownBy(() -> persistenceService.updateOrder(nonExistentId, request, user))
                 .isInstanceOf(OrderNotFoundException.class);
     }
 
@@ -235,7 +237,9 @@ class OrderPersistenceServiceTest {
     @Test
     @DisplayName("Should throw OrderNotFoundException when deleting non-existent order")
     void deleteOrderNotFound() {
-        assertThatThrownBy(() -> persistenceService.deleteOrder(UUID.randomUUID()))
+        UUID nonExistentId = UUID.randomUUID();
+
+        assertThatThrownBy(() -> persistenceService.deleteOrder(nonExistentId))
                 .isInstanceOf(OrderNotFoundException.class);
     }
 
