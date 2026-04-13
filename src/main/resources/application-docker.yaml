@@ -1,0 +1,9 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://postgres:5432/order_service}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:password}
+
+app:
+  user-service:
+    base-url: ${USER_SERVICE_URL:https://user-service:8080}
