@@ -52,27 +52,30 @@ public class OrderPersistenceService {
         order.setItems(new ArrayList<>(orderItems));
         order.setTotalPrice(calculateTotal(orderItems));
 
-        Order saved = orderRepository.save(order);
-        return orderMapper.toResponse(saved, user);
+        return orderMapper.toResponse(orderRepository.save(order), user);
     }
 
-    public Order findActiveOrder(UUID id) {
-        return orderRepository.findByIdAndDeletedFalse(id)
-                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + id));
+    @Transactional(readOnly = true)
+    public UUID findUserIdByOrderId(UUID id) {
+        return findActiveOrder(id).getUserId();
+    }
+
+    @Transactional(readOnly = true)
+    public OrderResponse findOrderById(UUID id, UserResponse user) {
+        return orderMapper.toResponse(findActiveOrder(id), user);
     }
 
     @Transactional(readOnly = true)
     public Page<Order> findOrders(OrderFilterRequest filter, Pageable pageable) {
-        Specification<Order> orderSpec = OrderSpecification
+        Specification<Order> spec = OrderSpecification
                 .createdBetween(filter.createdFrom(), filter.createdTo())
                 .and(OrderSpecification.hasStatuses(filter.statuses()));
-        return orderRepository.findAll(orderSpec, pageable);
+        return orderRepository.findAll(spec, pageable);
     }
 
     @Transactional(readOnly = true)
-    public Page<OrderResponse> findOrdersByUserId(UUID userId, UserResponse user, Pageable pageable) {
-        return orderRepository.findAllByUserIdAndDeletedFalse(userId, pageable)
-                .map(order -> orderMapper.toResponse(order, user));
+    public Page<Order> findOrdersByUserId(UUID userId, Pageable pageable) {
+        return orderRepository.findAllByUserIdAndDeletedFalse(userId, pageable);
     }
 
     @Transactional
@@ -118,8 +121,7 @@ public class OrderPersistenceService {
             order.setTotalPrice(calculateTotal(order.getItems()));
         }
 
-        Order updated = orderRepository.save(order);
-        return orderMapper.toResponse(updated, user);
+        return orderMapper.toResponse(orderRepository.save(order), user);
     }
 
     @Transactional
@@ -130,11 +132,13 @@ public class OrderPersistenceService {
         log.info("Order soft-deleted: {}", id);
     }
 
-    private List<OrderItem> buildOrderItems(List<OrderItemRequest> requests, Order order) {
-        List<UUID> itemIds = requests.stream()
-                .map(OrderItemRequest::itemId)
-                .toList();
+    private Order findActiveOrder(UUID id) {
+        return orderRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new OrderNotFoundException("Order not found with id: " + id));
+    }
 
+    private List<OrderItem> buildOrderItems(List<OrderItemRequest> requests, Order order) {
+        List<UUID> itemIds = requests.stream().map(OrderItemRequest::itemId).toList();
         List<Item> items = itemRepository.findAllById(itemIds);
 
         if (items.size() != itemIds.size()) {
@@ -142,21 +146,20 @@ public class OrderPersistenceService {
         }
 
         Map<UUID, Item> itemMap = items.stream()
-                .collect(Collectors.toMap(Item::getId, item -> item));
+                .collect(Collectors.toMap(Item::getId, i -> i));
 
-        return new ArrayList<>(requests.stream()
+        return requests.stream()
                 .map(req -> OrderItem.builder()
                         .order(order)
                         .item(itemMap.get(req.itemId()))
                         .quantity(req.quantity())
                         .build())
-                .toList());
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private BigDecimal calculateTotal(List<OrderItem> items) {
         return items.stream()
-                .map(oi -> oi.getItem().getPrice()
-                        .multiply(BigDecimal.valueOf(oi.getQuantity())))
+                .map(oi -> oi.getItem().getPrice().multiply(BigDecimal.valueOf(oi.getQuantity())))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

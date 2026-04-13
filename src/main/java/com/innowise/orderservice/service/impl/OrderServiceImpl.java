@@ -40,20 +40,20 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public OrderResponse getOrderById(UUID id) {
-        Order order = persistenceService.findActiveOrder(id);
-        UserResponse user = userServiceClient.getUserById(order.getUserId());
-        return orderMapper.toResponse(order, user);
+        UUID userId = persistenceService.findUserIdByOrderId(id);
+        UserResponse user = userServiceClient.getUserById(userId);
+        return persistenceService.findOrderById(id, user);
     }
 
     @Override
     public Page<OrderResponse> getOrders(OrderFilterRequest filter, Pageable pageable) {
         Page<Order> orders = persistenceService.findOrders(filter, pageable);
 
-        List<UUID> userIds = orders.stream()
-                .map(Order::getUserId)
-                .distinct()
-                .toList();
+        if (orders.isEmpty()) {
+            return Page.empty(pageable);
+        }
 
+        List<UUID> userIds = orders.stream().map(Order::getUserId).distinct().toList();
         Map<UUID, UserResponse> userMap = userServiceClient.getUsersByIds(userIds).stream()
                 .collect(Collectors.toMap(UserResponse::userId, u -> u));
 
@@ -63,7 +63,8 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public Page<OrderResponse> getOrdersByUserId(UUID userId, String userEmail, Pageable pageable) {
         UserResponse user = userServiceClient.getUserById(userId);
-        return persistenceService.findOrdersByUserId(userId, user, pageable);
+        return persistenceService.findOrdersByUserId(userId, pageable)
+                .map(order -> orderMapper.toResponse(order, user));
     }
 
     @Override

@@ -111,41 +111,26 @@ class OrderPersistenceServiceTest {
     }
 
     @Test
-    @DisplayName("Should return order when it exists and is not deleted")
-    void findActiveOrder() {
+    @DisplayName("Should return userId for existing active order")
+    void findUserIdByOrderId() {
         Order order = saveOrder();
+        UUID foundUserId = persistenceService.findUserIdByOrderId(order.getId());
 
-        Order found = persistenceService.findActiveOrder(order.getId());
-
-        assertThat(found.getId()).isEqualTo(order.getId());
-        assertThat(found.isDeleted()).isFalse();
+        assertThat(foundUserId).isEqualTo(USER_ID);
     }
 
     @Test
-    void findActiveOrderWhenDeleted() {
-        Order order = saveOrder();
-        order.setDeleted(true);
-        orderRepository.save(order);
-
-        UUID orderId = order.getId();
-
-        assertThatThrownBy(() -> persistenceService.findActiveOrder(orderId))
-                .isInstanceOf(OrderNotFoundException.class)
-                .hasMessageContaining(orderId.toString());
-    }
-
-    @Test
-    @DisplayName("Should throw OrderNotFoundException when order does not exist")
-    void findActiveOrderWhenNotFound() {
+    @DisplayName("Should throw OrderNotFoundException when getting userId for non-existent order")
+    void findUserIdByOrderIdNotFound() {
         UUID randomId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> persistenceService.findActiveOrder(randomId))
+        assertThatThrownBy(() -> persistenceService.findUserIdByOrderId(randomId))
                 .isInstanceOf(OrderNotFoundException.class)
                 .hasMessageContaining(randomId.toString());
     }
 
     @Test
-    @DisplayName("Should return paginated orders matching filter")
+    @DisplayName("Should return paginated Order entities matching filter")
     void findOrders() {
         saveOrder();
         saveOrder();
@@ -157,6 +142,7 @@ class OrderPersistenceServiceTest {
 
         assertThat(result.getTotalElements()).isEqualTo(2);
         assertThat(result.getContent()).allMatch(o -> o.getStatus() == OrderStatus.PENDING);
+        assertThat(result.getContent()).allMatch(o -> o.getUserId().equals(USER_ID));
     }
 
     @Test
@@ -181,9 +167,10 @@ class OrderPersistenceServiceTest {
         orderRepository.save(deleted);
 
         PageRequest pageable = PageRequest.of(0, 10);
-        Page<OrderResponse> result = persistenceService.findOrdersByUserId(USER_ID, user, pageable);
+        Page<Order> result = persistenceService.findOrdersByUserId(USER_ID, pageable);
 
         assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent()).allMatch(o -> o.getUserId().equals(USER_ID));
     }
 
     @Test

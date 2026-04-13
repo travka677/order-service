@@ -1,5 +1,6 @@
 package com.innowise.orderservice.exception;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -30,6 +32,29 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.NOT_FOUND)
                 .body(ErrorResponse.of(404, "Not Found", ex.getMessage()));
+    }
+
+    @ExceptionHandler(WebClientResponseException.class)
+    public ResponseEntity<ErrorResponse> handleWebClientException(WebClientResponseException ex) {
+        log.warn("External service error: status={}, message={}", ex.getStatusCode(), ex.getMessage());
+
+        HttpStatus status = (HttpStatus) ex.getStatusCode();
+        String message = status.is4xxClientError()
+                ? "External resource error: " + ex.getStatusText()
+                : "External service is currently unavailable";
+
+        return ResponseEntity
+                .status(status)
+                .body(ErrorResponse.of(status.value(), status.getReasonPhrase(), message));
+    }
+
+    @ExceptionHandler(CallNotPermittedException.class)
+    public ResponseEntity<ErrorResponse> handleCallNotPermitted(CallNotPermittedException ex) {
+        log.error("Circuit breaker is open: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ErrorResponse.of(503, "Service Unavailable",
+                        "User Service is temporarily unavailable due to high failure rate"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -62,7 +87,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex) {
-        log.warn("Service unavailable: {}", ex.getMessage());
+        log.warn("Illegal state: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ErrorResponse.of(503, "Service Unavailable", ex.getMessage()));
